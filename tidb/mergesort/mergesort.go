@@ -1,13 +1,36 @@
 package main
 
+import (
+	"runtime"
+	"sync"
+)
+
 // MergeSort performs the merge sort algorithm.
 // Please supplement this function to accomplish the home work.
 func MergeSort(src []int64) {
+	grLimit := runtime.NumCPU() - 1
+	grLimitChan := make(chan struct{}, grLimit)
+	mergeSort(src, grLimitChan)
+}
+
+func mergeSort(src []int64, grLimitChan chan struct{}) {
+	wg := sync.WaitGroup{}
 	length := len(src)
 	if length > 1 {
 		mid := length / 2
-		MergeSort(src[:mid])
-		MergeSort(src[mid:])
+
+		select {
+		case grLimitChan <- struct{}{}:
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				mergeSort(src[:mid], grLimitChan)
+			}()
+		default:
+			mergeSort(src[:mid], grLimitChan)
+		}
+		mergeSort(src[mid:], grLimitChan)
+		wg.Wait()
 		merge(src, mid)
 	}
 }
