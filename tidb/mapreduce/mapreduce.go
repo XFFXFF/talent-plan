@@ -3,15 +3,23 @@ package main
 import (
 	"bufio"
 	"encoding/json"
+	"fmt"
 	"hash/fnv"
 	"io/ioutil"
 	"log"
 	"os"
 	"path"
 	"runtime"
+	"sort"
 	"strconv"
 	"sync"
 )
+
+type KeySorter []KeyValue
+
+func (a KeySorter) Len() int           { return len(a) }
+func (a KeySorter) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a KeySorter) Less(i, j int) bool { return a[i].Key < a[j].Key }
 
 // KeyValue is a type used to hold the key/value pairs passed to the map and reduce functions.
 type KeyValue struct {
@@ -112,7 +120,46 @@ func (c *MRCluster) worker() {
 				// hint: don't encode results returned by ReduceF, and just output
 				// them into the destination file directly so that users can get
 				// results formatted as what they want.
-				panic("YOUR CODE HERE")
+				intermediate := []KeyValue{}
+				fs := make([]*os.File, t.nMap)
+				bs := make([]*bufio.Reader, t.nMap)
+				for i := range fs {
+					rpath := reduceName(t.dataDir, t.jobName, i, t.taskNumber)
+					fs[i], bs[i] = OpenFileAndBuf(rpath)
+				}
+
+				for i := range fs {
+					kva := []KeyValue{}
+					dec := json.NewDecoder(bs[i])
+					for {
+						var kv KeyValue
+						if err := dec.Decode(&kv); err != nil {
+							break
+						}
+						kva = append(kva, kv)
+					}
+					intermediate = append(intermediate, kva...)
+				}
+
+				sort.Sort(KeySorter(intermediate))
+
+				mpath := mergeName(t.dataDir, t.jobName, t.taskNumber)
+				file, buffer := CreateFileAndBuf(mpath)
+				i := 0
+				for i < len(intermediate) {
+					j := i + 1
+					for j < len(intermediate) && intermediate[j].Key == intermediate[i].Key {
+						j++
+					}
+					values := []string{}
+					for k := i; k < j; k++ {
+						values = append(values, intermediate[k].Value)
+					}
+					output := t.reduceF(intermediate[i].Key, values)
+					fmt.Fprintf(file, output)
+					i = j
+				}
+				SafeClose(file, buffer)
 			}
 			t.wg.Done()
 		case <-c.exit:
@@ -157,9 +204,36 @@ func (c *MRCluster) run(jobName, dataDir string, mapF MapF, reduceF ReduceF, map
 		t.wg.Wait()
 	}
 
+	tasks = make([]*task, 0, nReduce)
+	for i := 0; i < nReduce; i++ {
+		t := &task{
+			dataDir:    dataDir,
+			jobName:    jobName,
+			phase:      reducePhase,
+			taskNumber: i,
+			nReduce:    nReduce,
+			nMap:       nMap,
+			reduceF:    reduceF,
+		}
+		t.wg.Add(1)
+		tasks = append(tasks, t)
+		go func() { c.taskCh <- t }()
+	}
+	for _, t := range tasks {
+		t.wg.Wait()
+	}
+
+	outputFiles := make([]string, 0, nReduce)
+	for _, t := range tasks {
+		mpath := mergeName(t.dataDir, t.jobName, t.taskNumber)
+		outputFiles = append(outputFiles, mpath)
+	}
+
+	notify <- outputFiles
+
 	// reduce phase
 	// YOUR CODE HERE :D
-	panic("YOUR CODE HERE")
+	// panic("YOUR CODE HERE")
 }
 
 func ihash(s string) int {
