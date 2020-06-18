@@ -10,56 +10,58 @@ import (
 func MergeSort(src []int64) {
 	grLimit := runtime.NumCPU() - 1
 	grLimitChan := make(chan struct{}, grLimit)
-	mergeSort(src, grLimitChan)
+	temp := make([]int64, len(src))
+	mergeSort(src, temp, grLimitChan)
 }
 
-func mergeSort(src []int64, grLimitChan chan struct{}) {
+func mergeSort(src, temp []int64, grLimitChan chan struct{}) {
 	wg := sync.WaitGroup{}
 	length := len(src)
 	if length > 1 {
 		mid := length / 2
+
+		left, right := src[:mid], src[mid:]
+		lTemp, rTemp := temp[:mid], temp[mid:]
 
 		select {
 		case grLimitChan <- struct{}{}:
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				mergeSort(src[:mid], grLimitChan)
+				mergeSort(left, lTemp, grLimitChan)
 			}()
 		default:
-			mergeSort(src[:mid], grLimitChan)
+			mergeSort(left, lTemp, grLimitChan)
 		}
-		mergeSort(src[mid:], grLimitChan)
+		mergeSort(right, rTemp, grLimitChan)
 		wg.Wait()
-		merge(src, mid)
+		merge(src, lTemp, rTemp, mid)
 	}
 }
 
-func merge(src []int64, mid int) {
-	leftSrc := make([]int64, mid)
-	rightSrc := make([]int64, len(src)-mid)
-	copy(leftSrc, src[:mid])
-	copy(rightSrc, src[mid:])
+func merge(src, lTemp, rTemp []int64, mid int) {
+	copy(lTemp, src[:mid])
+	copy(rTemp, src[mid:])
 
 	i := 0
-	for len(leftSrc) > 0 && len(rightSrc) > 0 {
-		if leftSrc[0] < rightSrc[0] {
-			src[i] = leftSrc[0]
-			leftSrc = leftSrc[1:]
+	for len(lTemp) > 0 && len(rTemp) > 0 {
+		if lTemp[0] < rTemp[0] {
+			src[i] = lTemp[0]
+			lTemp = lTemp[1:]
 		} else {
-			src[i] = rightSrc[0]
-			rightSrc = rightSrc[1:]
+			src[i] = rTemp[0]
+			rTemp = rTemp[1:]
 		}
 		i++
 	}
 
-	for j := 0; j < len(leftSrc); j++ {
-		src[i] = leftSrc[j]
+	for j := 0; j < len(lTemp); j++ {
+		src[i] = lTemp[j]
 		i++
 	}
 
-	for j := 0; j < len(rightSrc); j++ {
-		src[i] = rightSrc[j]
+	for j := 0; j < len(rTemp); j++ {
+		src[i] = rTemp[j]
 		i++
 	}
 }
