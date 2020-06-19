@@ -1,42 +1,37 @@
 package main
 
 import (
-	"runtime"
+	"sort"
 	"sync"
 )
 
 // MergeSort performs the merge sort algorithm.
 // Please supplement this function to accomplish the home work.
 func MergeSort(src []int64) {
-	grLimit := runtime.NumCPU() - 1
-	grLimitChan := make(chan struct{}, grLimit)
 	temp := make([]int64, len(src))
-	mergeSort(src, temp, grLimitChan)
+	mergeSort(src, temp)
 }
 
-func mergeSort(src, temp []int64, grLimitChan chan struct{}) {
+func mergeSort(src, temp []int64) {
 	wg := sync.WaitGroup{}
 	length := len(src)
-	if length > 1 {
-		mid := length / 2
-
-		left, right := src[:mid], src[mid:]
-		lTemp, rTemp := temp[:mid], temp[mid:]
-
-		select {
-		case grLimitChan <- struct{}{}:
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				mergeSort(left, lTemp, grLimitChan)
-			}()
-		default:
-			mergeSort(left, lTemp, grLimitChan)
-		}
-		mergeSort(right, rTemp, grLimitChan)
-		wg.Wait()
-		merge(src, temp, left, right)
+	if length <= 10000 {
+		sort.Slice(src, func(i, j int) bool { return src[i] <= src[j] })
+		return
 	}
+	mid := length / 2
+
+	left, right := src[:mid], src[mid:]
+	lTemp, rTemp := temp[:mid], temp[mid:]
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		mergeSort(left, lTemp)
+	}()
+	mergeSort(right, rTemp)
+	wg.Wait()
+	merge(src, temp, left, right)
 }
 
 func merge(src, temp, left, right []int64) {
