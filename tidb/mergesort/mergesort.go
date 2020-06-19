@@ -35,33 +35,32 @@ func mergeSort(src, temp []int64, grLimitChan chan struct{}) {
 		}
 		mergeSort(right, rTemp, grLimitChan)
 		wg.Wait()
-		merge(src, lTemp, rTemp, mid)
+		merge(src, temp, left, right)
 	}
 }
 
-func merge(src, lTemp, rTemp []int64, mid int) {
-	copy(lTemp, src[:mid])
-	copy(rTemp, src[mid:])
-
+func merge(src, temp, left, right []int64) {
 	i := 0
-	for len(lTemp) > 0 && len(rTemp) > 0 {
-		if lTemp[0] < rTemp[0] {
-			src[i] = lTemp[0]
-			lTemp = lTemp[1:]
+	for len(left) > 0 && len(right) > 0 {
+		if left[0] < right[0] {
+			temp[i] = left[0]
+			left = left[1:]
 		} else {
-			src[i] = rTemp[0]
-			rTemp = rTemp[1:]
+			temp[i] = right[0]
+			right = right[1:]
 		}
 		i++
 	}
 
-	for j := 0; j < len(lTemp); j++ {
-		src[i] = lTemp[j]
+	for j := 0; j < len(left); j++ {
+		temp[i] = left[j]
 		i++
 	}
 
-	for j := 0; j < len(rTemp); j++ {
-		src[i] = rTemp[j]
+	for j := 0; j < len(right); j++ {
+		temp[i] = right[j]
 		i++
 	}
+
+	copy(src, temp)
 }
